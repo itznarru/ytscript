@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YT Transcript Cleaner</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f0f0f;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  .container { max-width: 780px; margin: 0 auto; }
+  .header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 28px;
+  }
+  .logo {
+    background: #ff0000;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 18px;
+  }
+  h1 { font-size: 22px; font-weight: 600; }
+  h1 span { color: #ff4444; }
+
+  label { font-size: 13px; color: #aaa; margin-bottom: 8px; display: block; }
+
+  textarea {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #2e2e2e;
+    border-radius: 10px;
+    color: #e0e0e0;
+    font-size: 14px;
+    padding: 14px;
+    resize: vertical;
+    outline: none;
+    transition: border 0.2s;
+    font-family: inherit;
+    line-height: 1.6;
+  }
+  textarea:focus { border-color: #ff4444; }
+  #inputBox { height: 220px; }
+  #outputBox { height: 180px; background: #111; }
+
+  .btn-row {
+    display: flex; gap: 10px; margin: 14px 0;
+    flex-wrap: wrap;
+  }
+  button {
+    padding: 10px 20px;
+    border: none; border-radius: 8px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: 0.2s;
+  }
+  #cleanBtn {
+    background: #ff2222;
+    color: #fff;
+    flex: 1;
+  }
+  #cleanBtn:hover { background: #cc0000; }
+  #clearBtn {
+    background: #2a2a2a; color: #aaa;
+  }
+  #clearBtn:hover { background: #333; color: #fff; }
+  #copyBtn {
+    background: #1db954; color: #fff;
+    display: none;
+  }
+  #copyBtn:hover { background: #17a349; }
+  #downloadBtn {
+    background: #2a2a2a; color: #aaa;
+    display: none;
+  }
+  #downloadBtn:hover { background: #333; color: #fff; }
+
+  .stats {
+    font-size: 12px; color: #666;
+    margin-bottom: 10px;
+    min-height: 18px;
+  }
+  .stats span { color: #ff8888; font-weight: 600; }
+
+  .divider {
+    text-align: center;
+    color: #444; font-size: 12px;
+    margin: 10px 0;
+    position: relative;
+  }
+  .divider::before, .divider::after {
+    content: '';
+    position: absolute; top: 50%;
+    width: 42%; height: 1px;
+    background: #2a2a2a;
+  }
+  .divider::before { left: 0; }
+  .divider::after { right: 0; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: #1db954; color: #fff;
+    padding: 10px 22px; border-radius: 20px;
+    font-size: 14px; font-weight: 600;
+    transition: transform 0.3s ease;
+    pointer-events: none;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="logo">▶</div>
+    <h1>YT Transcript <span>Cleaner</span></h1>
+  </div>
+
+  <label>📋 Transcript yahan paste karo (with timestamps)</label>
+  <textarea id="inputBox" placeholder="Example:
+[0:05] Hello everyone welcome to this video
+[0:12] today we will learn something new
+[1:23] keep watching for more tips...
+
+YouTube transcript yahan paste karo aur Clean karo ✨"></textarea>
+
+  <div class="btn-row">
+    <button id="cleanBtn" onclick="cleanTranscript()">⚡ Clean Karo</button>
+    <button id="clearBtn" onclick="clearAll()">🗑 Clear</button>
+  </div>
+
+  <div class="divider">OUTPUT</div>
+
+  <div class="stats" id="stats"></div>
+  <textarea id="outputBox" placeholder="Clean text yahan aayega..." readonly></textarea>
+
+  <div class="btn-row">
+    <button id="copyBtn" onclick="copyText()">📋 Copy Karo</button>
+    <button id="downloadBtn" onclick="downloadText()">⬇ Download .html</button>
+  </div>
+</div>
+
+<div class="toast" id="toast">✅ Copy ho gaya!</div>
+
+<script>
+  let cleanedText = '';
+
+  function cleanTranscript() {
+    const input = document.getElementById('inputBox').value.trim();
+    if (!input) { alert('Pehle transcript paste karo!'); return; }
+
+    // Remove metadata block at the start (📺 Title: ... 📅 Published: ...)
+    // This handles YT transcript tools that prepend video info
+    let cleaned = input;
+    const metaEndMarkers = ['📅 Published:', 'Published:', '⏱️ Duration:', 'Duration:'];
+    for (const marker of metaEndMarkers) {
+      const idx = cleaned.indexOf(marker);
+      if (idx !== -1) {
+        // Find end of that line
+        const lineEnd = cleaned.indexOf('\n', idx);
+        if (lineEnd !== -1) {
+          cleaned = cleaned.slice(lineEnd + 1).trim();
+        }
+        break;
+      }
+    }
+
+    // Remove timestamps [MM:SS] [HH:MM:SS] [M:SS] etc
+    cleaned = cleaned.replace(/\[\d{1,2}:\d{2}(?::\d{2})?\]/g, '');
+
+    // Merge lines
+    const lines = cleaned.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    cleaned = lines.join(' ');
+
+    // Collapse multiple spaces
+    cleaned = cleaned.replace(/\s{2,}/g, ' ').trim();
+
+    cleanedText = cleaned;
+    document.getElementById('outputBox').value = cleaned;
+
+    // Stats
+    const words = cleaned.split(/\s+/).filter(Boolean).length;
+    const tsCount = (input.match(/\[\d{1,2}:\d{2}(?::\d{2})?\]/g) || []).length;
+    document.getElementById('stats').innerHTML =
+      `<span>${tsCount}</span> timestamps hataaye &nbsp;|&nbsp; <span>${words}</span> words`;
+
+    document.getElementById('copyBtn').style.display = 'block';
+    document.getElementById('downloadBtn').style.display = 'block';
+  }
+
+  function clearAll() {
+    cleanedText = '';
+    document.getElementById('inputBox').value = '';
+    document.getElementById('outputBox').value = '';
+    document.getElementById('stats').innerHTML = '';
+    document.getElementById('copyBtn').style.display = 'none';
+    document.getElementById('downloadBtn').style.display = 'none';
+  }
+
+  function copyText() {
+    if (!cleanedText) return;
+    navigator.clipboard.writeText(cleanedText).then(() => showToast());
+  }
+
+  function downloadText() {
+    if (!cleanedText) return;
+    const escaped = cleanedText.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const htmlContent = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clean Transcript</title>
+<style>
+  body { font-family: sans-serif; padding: 20px 16px; font-size: 17px; line-height: 2; color: #222; background: #fff; }
+</style></head><body>${escaped}</body></html>`;
+    const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'clean_transcript.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function showToast() {
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  // Ctrl+Enter shortcut
+  document.getElementById('inputBox').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') cleanTranscript();
+  });
+</script>
+</body>
+</html>
